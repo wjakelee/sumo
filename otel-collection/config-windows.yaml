@@ -1,3 +1,7 @@
+extensions:
+  sumologic:
+    collector_fields:
+      customfield: customvalue
 receivers:
  windowseventlog/application:
   channel: Application
