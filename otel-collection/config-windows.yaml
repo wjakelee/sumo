@@ -1,0 +1,106 @@
+receivers:
+ windowseventlog/application:
+  channel: Application
+  operators:
+   - type: add
+     field: resource["_sourceName"]
+     value: Application
+ windowseventlog/security:
+  channel: Security
+  operators:
+   - type: add
+     field: resource["_sourceName"]
+     value: Security
+ windowseventlog/system:
+  channel: System
+  operators:
+   - type: add
+     field: resource["_sourceName"]
+     value: System
+ hostmetrics:
+  collection_interval: 1m
+  scrapers:
+   cpu:
+    metrics:
+     system.cpu.utilization:
+      enabled: true
+   load: null
+   memory:
+    metrics:
+     system.memory.utilization:
+      enabled: true
+   disk: null
+   filesystem:
+    metrics:
+     system.filesystem.utilization:
+      enabled: true
+   network: null
+   paging: null
+   process:
+    exclude:
+     match_type: strict
+     names:
+      - null
+    mute_process_exe_error: true
+    mute_process_io_error: true
+    mute_process_name_error: true
+    metrics:
+     process.threads:
+      enabled: true
+     process.cpu.utilization:
+      enabled: true
+     process.memory.utilization:
+      enabled: true
+     process.disk.operations:
+      enabled: true
+processors:
+ resource/windows_resource_attributes:
+  attributes:
+   - key: sumo.datasource
+     value: windows
+     action: insert
+   - key: _contentType
+     value: OpenTelemetry
+     action: insert
+   - key: _sourceCategory
+     value: otel/windows
+     action: insert
+ resource/windows_resource_attributes/metrics:
+  attributes:
+   - key: _source
+     value: windows/hostmetrics
+     action: insert
+   - key: _sourceName
+     value: windows
+     action: insert
+ resource/windows_resource_attributes/logs:
+  attributes:
+   - key: _source
+     value: windows/windowseventlog
+     action: insert
+service:
+ pipelines:
+  metrics/windows:
+   receivers:
+    - hostmetrics
+   processors:
+    - memory_limiter
+    - resourcedetection/system
+    - resource/windows_resource_attributes/metrics
+    - resource/windows_resource_attributes
+    - batch
+   exporters:
+    - sumologic
+  logs/windows:
+   receivers:
+    - windowseventlog/application
+    - windowseventlog/system
+    - windowseventlog/security
+   processors:
+    - memory_limiter
+    - resourcedetection/system
+    - resource/windows_resource_attributes/logs
+    - resource/windows_resource_attributes
+    - batch
+   exporters:
+    - sumologic
