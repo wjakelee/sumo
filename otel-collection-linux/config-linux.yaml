@@ -1,0 +1,115 @@
+# check out all of our support receivers, processors, exporters, extensions here: https://github.com/SumoLogic/sumologic-otel-collector/tree/main?tab=readme-ov-file#sumo-logic-distribution-for-opentelemetry-collector
+# you can add custom collector tags using the sumologic extension and the collector_fields parameter
+extensions:
+  sumologic:
+    collector_fields:
+      customfield: "customvalue"
+# receivers read from the logs and metrics on the server (i.e. local file logs)
+receivers:
+# filelog receiver allows you to read from local file logs. you may want to update this - see https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/v0.124.1/receiver/filelogreceiver
+  filelog/linux/logs:
+    storage: file_storage
+    include_file_name: false
+    include_file_path: true
+    operators:
+      - type: move
+        from: attributes["log.file.path"]
+        to: resource["log.file.path"]
+      - type: copy
+        from: resource["log.file.path"]
+        to: resource["_sourceName"]
+    include:
+      - /var/log/auth.log
+      - /var/log/syslog
+      - /var/log/daemon.log
+      - /var/log/dpkg.log
+      - /var/log/kern.log
+# host metrics configuration - see https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/v0.124.1/receiver/hostmetricsreceiver
+  hostmetrics/linux:
+    collection_interval: 1m
+    scrapers:
+      cpu:
+        metrics:
+          system.cpu.utilization:
+            enabled: true
+      load: null
+      memory:
+        metrics:
+          system.memory.utilization:
+            enabled: true
+    disk: null
+    filesystem:
+      metrics:
+        system.filesystem.utilization:
+          enabled: true
+    network: null
+    paging: null
+    process:
+      exclude:
+        match_type: strict
+        names:
+          - null
+      mute_process_exe_error: true
+      mute_process_io_error: true
+      mute_process_name_error: true
+      metrics:
+        process.threads:
+          enabled: true
+        process.cpu.utilization:
+          enabled: true
+        process.memory.utilization:
+          enabled: true
+        process.disk.operations:
+          enabled: true
+# processors allow you to perform additional actions on data before sending to sumo (i.e. filtering, tagging, etc)
+# feel free to update these and use your own sourcecategories if you want:
+processors:
+  resource/linux_resource_attributes:
+    attributes:
+      - key: sumo.datasource
+        value: linux
+        action: insert
+      - key: _contentType
+        value: OpenTelemetry
+        action: insert
+      - key: _sourceCategory
+        value: otel/linux
+        action: insert
+  resource/linux_resource_attributes/metrics:
+    attributes:
+      - key: _source
+        value: linux/hostmetrics
+        action: insert
+      - key: _sourceName
+        value: linux
+        action: insert
+  resource/linux_resource_attributes/logs:
+    attributes:
+      - key: _source
+        value: linux/filelog
+        action: insert
+# services define the pipelines that connect receivers, processors and exporters
+service:
+  pipelines:
+    metrics/linux:
+      receivers:
+        - hostmetrics/linux
+      processors:
+        - memory_limiter
+        - resource/linux_resource_attributes
+        - resourcedetection/system
+        - resource/linux_resource_attributes/metrics
+        - batch
+      exporters:
+        - sumologic
+    logs/linux:
+      receivers:
+        - filelog/linux/logs
+      processors:
+        - memory_limiter
+        - resource/linux_resource_attributes
+        - resourcedetection/system
+        - resource/linux_resource_attributes/logs
+        - batch
+      exporters:
+        - sumologic
